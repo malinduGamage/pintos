@@ -74,71 +74,135 @@ int pintos_init (void) NO_RETURN;
 
 /* Pintos main entry point. */
 int
-pintos_init (void)
-{
-  char **argv;
+pintos_init (void) {
+    char **argv;
 
-  /* Clear BSS. */  
-  bss_init ();
+    /* Clear BSS. */
+    bss_init();
 
-  /* Break command line into arguments and parse options. */
-  argv = read_command_line ();
-  argv = parse_options (argv);
+    /* Break command line into arguments and parse options. */
+    argv = read_command_line();
+    argv = parse_options(argv);
 
-  /* Initialize ourselves as a thread so we can use locks,
-     then enable console locking. */
-  thread_init ();
-  console_init ();  
+    /* Initialize ourselves as a thread so we can use locks,
+       then enable console locking. */
+    thread_init();
+    console_init();
 
-  /* Greet user. */
-  printf ("Pintos booting with %'"PRIu32" kB RAM...\n",
-          init_ram_pages * PGSIZE / 1024);
+    /* Greet user. */
+    printf("Pintos booting with %'"PRIu32" kB RAM...\n",
+           init_ram_pages * PGSIZE / 1024);
 
-  /* Initialize memory system. */
-  palloc_init (user_page_limit);
-  malloc_init ();
-  paging_init ();
+    /* Initialize memory system. */
+    palloc_init(user_page_limit);
+    malloc_init();
+    paging_init();
 
-  /* Segmentation. */
+    /* Segmentation. */
 #ifdef USERPROG
-  tss_init ();
-  gdt_init ();
+    tss_init ();
+    gdt_init ();
 #endif
 
-  /* Initialize interrupt handlers. */
-  intr_init ();
-  timer_init ();
-  kbd_init ();
-  input_init ();
+    /* Initialize interrupt handlers. */
+    intr_init();
+    timer_init();
+    kbd_init();
+    input_init();
 #ifdef USERPROG
-  exception_init ();
-  syscall_init ();
+    exception_init ();
+    syscall_init ();
 #endif
 
-  /* Start thread scheduler and enable interrupts. */
-  thread_start ();
-  serial_init_queue ();
-  timer_calibrate ();
+    /* Start thread scheduler and enable interrupts. */
+    thread_start();
+    serial_init_queue();
+    timer_calibrate();
 
 #ifdef FILESYS
-  /* Initialize file system. */
-  ide_init ();
-  locate_block_devices ();
-  filesys_init (format_filesys);
+    /* Initialize file system. */
+    ide_init ();
+    locate_block_devices ();
+    filesys_init (format_filesys);
 #endif
 
-  printf ("Boot complete.\n");
-  
-  if (*argv != NULL) {
-    /* Run actions specified on kernel command line. */
-    run_actions (argv);
-  } else {
-    // TODO: no command line passed to kernel. Run interactively 
-  }
+    printf("Boot complete.\n");
 
-  /* Finish up. */
-  shutdown ();
-  thread_exit ();
+    if (*argv != NULL) {
+        /* Run actions specified on kernel command line. */
+        run_actions(argv);
+    } else {
+        char c;
+        while (true) {
+            printf("malindu@pintos_> ");
+            size_t i = 0;
+            char line[64];
+            while (true) {
+
+                c = input_getc(); // Get a character from input
+
+                // backspace
+                if (c == '\b') {
+                    if (i > 0) {
+                        i--;
+                        line[i] = '\0';
+                        printf("\b \b"); // Move the cursor back, erase character, move cursor back again
+                    }
+                }
+                    // Enter
+                else if (c == '\n' || c == '\r') {
+                    line[i] = '\0'; // Null-terminate the string
+                    printf("\n");
+                    break;
+                }
+                    // normal characters
+                else if (i < 255) {
+                    line[i++] = c;
+                    putchar(c); // Echo the character back
+                }
+            }
+            //handling the commands
+            // whoami command - prints name and index
+            if (!strcmp("whoami\0", line)) {
+                printf("GAMAGE MS - 210176F\n");
+            }
+                // ram command - prints amount of ram
+            else if (!strcmp("ram\0", line)) {
+                printf("%'"PRIu32" kB RAM...\n", init_ram_pages * PGSIZE / 1024);
+            }
+                //thread command - prints current thread status
+            else if (!strcmp("thread\0", line)) {
+                thread_print_stats();
+            }
+                //priority command - prints current thread priority
+            else if (!strcmp("priority\0", line)) {
+                printf("%d\n", thread_current()->priority);
+            }
+                //time command - prints time since unix epocy
+            else if (!strcmp("time\0", line)) {
+                printf("%lld s\n", (long long) rtc_get_time());
+            }
+                //exit command
+            else if (!strcmp("exit\0", line)) {
+                printf("exiting interactive shell...\n");
+                break;
+            }
+                //shutdown command
+            else if (!strcmp("shutdown\0", line)) {
+                printf("shuttig down...\n");
+                shutdown_power_off();
+            }
+                //for invalid commands
+            else {
+                printf("invalid command\n");
+            }
+        }
+    }
+
+
+    /* Finish up. */
+    shutdown();
+    thread_exit();
 }
 
 /* Clear the "BSS", a segment that should be initialized to
