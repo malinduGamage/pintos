@@ -17,9 +17,50 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/synch.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
+void argument_pass(int argc,char* argv[],void **esp);
+
+
+
+void
+argument_pass(int argc,char* argv[],void **esp)
+{
+    int len;
+    char* arg_address[argc];
+    for (int i = argc-1 ; i >= 0 ; i--)
+    {
+
+        len = strlen(argv[i])+1;
+        *esp -= len;
+        memcpy(*esp, argv[i], len);
+        arg_address[argc-1-i] = *esp;
+
+    }
+    *esp -= ((unsigned int) *esp)%4;
+
+    *esp -= 4;
+    *((uint32_t*) *esp) = 0;
+
+    for (int i=argc-1; i>=0; i--)
+    {
+        *esp -=4;
+        *((void **) *esp) = arg_address[i];
+
+    }
+
+    *esp -= 4;
+    *((void **) *esp) = *esp+4;
+
+    *esp -= 4;
+    *((int *) *esp) = argc;
+
+    *esp -= 4;
+    *((int *) *esp) = 0;
+
+}
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -41,7 +82,8 @@ process_execute (const char *file_name)
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
+    palloc_free_page (fn_copy);
+
   return tid;
 }
 
@@ -54,6 +96,19 @@ start_process (void *file_name_)
   struct intr_frame if_;
   bool success;
 
+  char* save_ptr;
+  char *arg;
+  char* argv[10];
+  int argc = 0;
+
+  for (arg = strtok_r(file_name, " ", &save_ptr); arg!=NULL; arg = strtok_r(NULL, " ", &save_ptr))
+  {
+      argv[argc]=arg;
+
+      argc++;
+  }
+  file_name = argv[0];
+
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
@@ -61,10 +116,12 @@ start_process (void *file_name_)
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp);
 
+  argument_pass(argc,argv,&if_.esp);
   /* If load failed, quit. */
   palloc_free_page (file_name);
-  if (!success) 
-    thread_exit ();
+  if (!success) {
+      thread_exit();
+  }
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -88,7 +145,11 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  return -1;
+    int i =-10000000;
+    while(i<1000000000){
+        i++;
+    }
+    return -1;
 }
 
 /* Free the current process's resources. */
@@ -101,7 +162,7 @@ process_exit (void)
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
-  if (pd != NULL) 
+  if (pd != NULL)
     {
       /* Correct ordering here is crucial.  We must set
          cur->pagedir to NULL before switching page directories,
