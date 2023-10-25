@@ -25,8 +25,8 @@ static bool create (const char *file, unsigned initial_size);
 static bool remove (const char *file);
 static int open (const char *file);
 static int filesize (int fd);
-static int read (int fd, void *buffer, unsigned size);
-static int write (int fd, const void *buffer, unsigned size);
+static int read (int fd, void *bffr, unsigned size);
+static int write (int fd, const void *bffr, unsigned size);
 static void seek (int fd, unsigned position);
 static unsigned tell (int fd);
 static void close (int fd);
@@ -80,7 +80,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     const char *cmd_line;
     pid_t pid;
     char *file;
-    const void *buffer;
+    const void *bffr;
     unsigned size;
 
     if(!is_valid_pointer( ((int *) esp) ) || !is_valid_pointer( ((int *) esp)+1 ) || !is_valid_pointer( ((int *) esp)+2 ))
@@ -123,15 +123,15 @@ syscall_handler (struct intr_frame *f UNUSED)
             break;
         case SYS_READ:
             fd = *(((int *) esp) + 1);
-            void *buffer = (void *) *(((int **) esp) + 2);
+            void *bffr = (void *) *(((int **) esp) + 2);
             unsigned size = *(((unsigned *) esp) + 3);
-            *eax = (uint32_t)read (fd, buffer, size);
+            *eax = (uint32_t)read (fd, bffr, size);
             break;
         case SYS_WRITE:
             fd = *(((int *) esp) + 1);
-            buffer = (void *) *(((int **) esp) + 2);
+            bffr = (void *) *(((int **) esp) + 2);
             size = *(((unsigned *) esp) + 3);
-            *eax = (uint32_t) write (fd, buffer, size);
+            *eax = (uint32_t) write (fd, bffr, size);
             break;
         case SYS_SEEK:
             fd = *(((int *) esp) + 1);
@@ -189,12 +189,12 @@ wait (pid_t pid)
 static bool
 create (const char *file, unsigned initial_size)
 {
-    bool retval;
+    bool return_val;
     if(is_valid_pointer(file)) {
         lock_acquire (&filesys_lock);
-        retval = filesys_create (file, initial_size);
+        return_val = filesys_create (file, initial_size);
         lock_release (&filesys_lock);
-        return retval;
+        return return_val;
     }
     else
         exit (-1);
@@ -242,26 +242,26 @@ open (const char *file)
 static int
 filesize (int fd)
 {
-    int retval;
+    int return_val;
     struct openfile *of = NULL;
     of = getFile (fd);
     if (of == NULL)
         return 0;
     lock_acquire (&filesys_lock);
-    retval = file_length (of->file);
+    return_val = file_length (of->file);
     lock_release (&filesys_lock);
-    return retval;
+    return return_val;
 }
 
 static int
-read (int fd, void *buffer, unsigned size)
+read (int fd, void *bffr, unsigned size)
 {
     int bytes_read = 0;
     char *bufChar = NULL;
     struct openfile *of = NULL;
-    if (!is_valid_pointer(buffer))
+    if (!is_valid_pointer(bffr))
         exit (-1);
-    bufChar = (char *)buffer;
+    bufChar = (char *)bffr;
     if(fd == 0) {
         while(size > 0) {
             input_getc();
@@ -275,23 +275,23 @@ read (int fd, void *buffer, unsigned size)
         if (of == NULL)
             return -1;
         lock_acquire (&filesys_lock);
-        bytes_read = file_read (of->file, buffer, size);
+        bytes_read = file_read (of->file, bffr, size);
         lock_release (&filesys_lock);
         return bytes_read;
     }
 }
 
 static int
-write (int fd, const void *buffer, unsigned size)
+write (int fd, const void *bffr, unsigned size)
 {
     int bytes_written = 0;
     char *bufChar = NULL;
     struct openfile *of = NULL;
-    if (!is_valid_pointer(buffer))
+    if (!is_valid_pointer(bffr))
         exit (-1);
-    bufChar = (char *)buffer;
+    bufChar = (char *)bffr;
     if(fd == 1) {
-        /* break up large buffers */
+        /* break up large bffrs */
         while(size > 200) {
             putbuf(bufChar, 200);
             bufChar += 200;
@@ -307,7 +307,7 @@ write (int fd, const void *buffer, unsigned size)
         if (of == NULL)
             return 0;
         lock_acquire (&filesys_lock);
-        bytes_written = file_write (of->file, buffer, size);
+        bytes_written = file_write (of->file, bffr, size);
         lock_release (&filesys_lock);
         return bytes_written;
     }
@@ -329,15 +329,15 @@ seek (int fd, unsigned position)
 static unsigned
 tell (int fd)
 {
-    unsigned retval;
+    unsigned return_val;
     struct openfile *of = NULL;
     of = getFile (fd);
     if (of == NULL)
         return 0;
     lock_acquire (&filesys_lock);
-    retval = file_tell (of->file);
+    return_val = file_tell (of->file);
     lock_release (&filesys_lock);
-    return retval;
+    return return_val;
 }
 
 static void
