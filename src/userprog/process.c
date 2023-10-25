@@ -30,6 +30,7 @@ argument_pass(int argc,char* argv[],void **esp)
 {
     int len;
     char* arg_address[argc];
+    //argvs
     for (int i = argc-1 ; i >= 0 ; i--)
     {
 
@@ -39,24 +40,25 @@ argument_pass(int argc,char* argv[],void **esp)
         arg_address[argc-1-i] = *esp;
 
     }
+    //alignling
     *esp -= ((unsigned int) *esp)%4;
 
     *esp -= 4;
     *((uint32_t*) *esp) = 0;
-
+    //addresses of argvs
     for (int i=argc-1; i>=0; i--)
     {
         *esp -=4;
         *((void **) *esp) = arg_address[i];
 
     }
-
+    //argv pointer
     *esp -= 4;
     *((void **) *esp) = *esp+4;
-
+    //argc
     *esp -= 4;
     *((int *) *esp) = argc;
-
+    //return address
     *esp -= 4;
     *((int *) *esp) = 0;
 
