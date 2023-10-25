@@ -1,0 +1,222 @@
+		     +-------------------------------------+
+       	     	     |		          CS 2043		        |
+		     |   PROJECT 2: USER PROGRAMS	|
+		     | 	       DESIGN DOCUMENT         	|
+		     +-------------------------------------+
+
+---- GAMAGE M.S 210176F ----
+
+
+			   ARGUMENT PASSING
+			   ================
+
+---- DATA STRUCTURES ----
+
+>> A1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+
+---- ALGORITHMS ----
+
+>> A2: Briefly describe how you implemented argument parsing.  How do you arrange for the elements of argv[] to be in the right order?
+
+	-arguments passed using void argument_pass(int argc,char* argv[],void **esp); function
+	-first made the argv array of agruments using strtok_r function
+	-then passed the arguments to the stack using esp ( last one to first one )
+	-after that passed the argc and pointer to argv
+
+					void argument_pass(int argc,char* argv[],void **esp)
+                                            {
+                                                int len;
+                                                char* arg_address[argc];
+                                                //argvs
+                                                for (int i = argc-1 ; i >= 0 ; i--)
+                                                {
+                                            
+                                                    len = strlen(argv[i])+1;
+                                                    *esp -= len;
+                                                    memcpy(*esp, argv[i], len);
+                                                    arg_address[argc-1-i] = *esp;
+                                            
+                                                }
+                                                //alignling
+                                                *esp -= ((unsigned int) *esp)%4;
+                                            
+                                                *esp -= 4;
+                                                *((uint32_t*) *esp) = 0;
+
+                                                //addresses of argvs
+                                                for (int i=argc-1; i>=0; i--)
+                                                {
+                                                    *esp -=4;
+                                                    *((void **) *esp) = arg_address[i];
+                                            
+                                                }
+                                                //argv pointer
+                                                *esp -= 4;
+                                                *((void **) *esp) = *esp+4;
+
+                                                //argc
+                                                *esp -= 4;
+                                                *((int *) *esp) = argc;
+
+                                                //return address
+                                                *esp -= 4;
+                                                *((int *) *esp) = 0;
+                                            
+                                            }
+
+
+---- RATIONALE ----
+
+>> A3: Why does Pintos implement strtok_r() but not strtok()?
+
+	- strtok_r() is a  version of strtok(), which allows multiple 
+	threads to safely use it without interfering with each other. In a 
+	multi-threaded environment, using strtok() can lead to race conditions
+ 	and data corruption. 
+
+>> A4: In Pintos, the kernel separates commands into a executable name
+>> and arguments.  In Unix-like systems, the shell does this
+>> separation.  Identify at least two advantages of the Unix approach.
+
+	- By separating the executable name from its arguments, it allows
+	 for a high degree of flexibility and modularity.you can easily change
+	 the arguments passed to a command without modifying the
+	command itself.
+
+	- consistent and standardized way of executing commands. first
+	name then agruments.
+
+			     SYSTEM CALLS
+			     ============
+
+---- DATA STRUCTURES ----
+
+>> B1: Copy here the declaration of each new or changed `struct' or
+>> `struct' member, global or static variable, `typedef', or
+>> enumeration.  Identify the purpose of each in 25 words or less.
+
+
+                                        struct thread
+                                          {
+						...
+					    int exit_status;                    /* Store the exit status */
+                                            int next_fd;                        /* The next file descriptor to use when opening a file. */
+                                            struct list openfiles;              /* List of files currently opened by this thread. */
+						...
+                                          };
+					
+					struct openfile
+					 {
+                                            struct list_elem elem;
+                                            int fd;
+                                            struct file *file;
+                                        };
+					Structure to keep track of details of opened files
+
+>> B2: Describe how file descriptors are associated with open files.
+>> Are file descriptors unique within the entire OS or just within a
+>> single process?
+
+	-File descriptors are unique just within a single process. Each process tracks 
+	a list of its file descriptors as well as its next available fd number. 
+
+---- ALGORITHMS ----
+
+>> B3: Describe your code for reading and writing user data from the
+>> kernel.
+
+	-by validating all pointers and accesses first.
+	By ensuring that all pointers we encounter are valid right at the begining, we can 
+	access memory directly without worry. 
+
+
+>> B4: Suppose a system call causes a full page (4,096 bytes) of data
+>> to be copied from user space into the kernel.  What is the least
+>> and the greatest possible number of inspections of the page table
+>> (e.g. calls to pagedir_get_page()) that might result?  What about
+>> for a system call that only copies 2 bytes of data?  Is there room
+>> for improvement in these numbers, and how much?
+
+	-The least number of times is 1 The greatest number of times it could be 
+	called is 4096
+
+	-If you do use pagedir_get_page() for pointer validation, then the least
+	 number of calls would be 1, and the max would be 8192 (2*4096).
+
+>> B5: Briefly describe your implementation of the "wait" system call
+>> and how it interacts with process termination.
+
+	-
+
+>> B6: Any access to user program memory at a user-specified address
+>> can fail due to a bad pointer value.  Such accesses must cause the
+>> process to be terminated.  System calls are fraught with such
+>> accesses, e.g. a "write" system call requires reading the system
+>> call number from the user stack, then each of the call's three
+>> arguments, then an arbitrary amount of user memory, and any of
+>> these can fail at any point.  This poses a design and
+>> error-handling problem: how do you best avoid obscuring the primary
+>> function of code in a morass of error-handling?  Furthermore, when
+>> an error is detected, how do you ensure that all temporarily
+>> allocated resources (locks, buffers, etc.) are freed?  In a few
+>> paragraphs, describe the strategy or strategies you adopted for
+>> managing these issues.  Give an example.
+
+			static bool
+                            is_valid_pointer (const void *pointer)
+                            {
+                                struct thread *t = thread_current ();
+                            
+                                if (pointer == NULL)
+                                    return false;
+                                if (is_kernel_vaddr (pointer))
+                                    return false;
+                                if (pagedir_get_page (t->pagedir, pointer) == NULL)
+                                    return false;
+                            
+                                return true;
+                            }
+	-used this function to validate the pointers
+
+
+---- SYNCHRONIZATION ----
+
+>> B7: The "exec" system call returns -1 if loading the new executable
+>> fails, so it cannot return before the new executable has completed
+>> loading.  How does your code ensure this?  How is the load
+>> success/failure status passed back to the thread that calls "exec"?
+
+			static pid_t
+                            exec(const char *cmd_line)
+                            {
+                                tid_t child_tid = TID_ERROR;
+                            
+                                if(!is_valid_pointer(cmd_line))
+                                    exit (-1);
+                            
+                                child_tid = process_execute (cmd_line);
+                            
+                                return child_tid;
+                            }
+
+>> B8: Consider parent process P with child process C.  How do you
+>> ensure proper synchronization and avoid race conditions when P
+>> calls wait(C) before C exits?  After C exits?  How do you ensure
+>> that all resources are freed in each case?  How about when P
+>> terminates without waiting, before C exits?  After C exits?  Are
+>> there any special cases?
+
+---- RATIONALE ----
+
+>> B9: Why did you choose to implement access to user memory from the
+>> kernel in the way that you did?
+
+>> B10: What advantages or disadvantages can you see to your design
+>> for file descriptors?
+
+>> B11: The default tid_t to pid_t mapping is the identity mapping.
+>> If you changed it, what advantages are there to your approach?
+
